@@ -1,0 +1,38 @@
+name: prod
+
+on:
+  push:
+    branches: [master]
+    
+jobs:
+  prod:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ['ubuntu-latest']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup node.js
+        uses: actions/setup-node@v2
+
+      - name: Compile CSS and JavaScript assets
+        run: |
+          cd resources/app
+          yarn install
+          yarn build
+        env:
+          CI: false
+
+      - name: Move the fronted app for production to the public folder
+        run: |
+          rm -rf public/build
+          rsync -av resources/app/build public
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: build css & javascript
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

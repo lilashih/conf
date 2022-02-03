@@ -1,0 +1,79 @@
+name: test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+    
+jobs:
+  run_php-cs-fixer_and_phpunit:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ['ubuntu-latest']
+        php-versions: ['7.1']
+        composer-versions: ['v1']
+        php-cs-fixer-versions: ['3.1.0']
+    services:
+      mysql:
+        image: mariadb:10.2.10
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_DATABASE: my_db
+        ports:
+          - 4306:3306
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-versions }}
+          extensions: intl, bcmath, curl, openssl, mbstring, pdo, pdo_mysql
+          ini-values: post_max_size=256M, max_execution_time=300, memory_limit=-1, error_reporting = E_ALL& ~E_NOTICE
+          tools: php-cs-fixer:${{ matrix.php-cs-fixer-versions }}, composer:${{ matrix.composer-versions }}
+          coverage: xdebug
+        env:
+          runner: self-hosted
+
+      - name: Run php-cs-fixer
+        run: |
+          php-cs-fixer fix app/
+          php-cs-fixer fix tests/
+
+      - name: Compile CSS from SCSS files
+        uses: gha-utilities/sass-build@v0.4.3
+        with:
+          source: ./public/assets/scss/main.scss
+          destination: ./public/assets/css/main.min.css
+
+      - name: Setup project
+        run: |
+          cp .env.ci .env
+          composer install
+          composer migrate
+
+      - name: Execute tests
+        continue-on-error: true
+        run: |
+          composer test-r
+
+      - name: Read log
+        continue-on-error: true
+        id: log
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: ./storage/logs/phpunit.log
+
+      - name: Echo log
+        run: echo "${{ steps.log.outputs.content }}"
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Apply php-cs-fixer
+          branch: master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
