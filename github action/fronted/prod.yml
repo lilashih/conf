@@ -25,7 +25,7 @@ jobs:
         env:
           CI: false
 
-      - name: Move the fronted app for production to the public folder
+      - name: Move the fronted app to the public folder
         run: |
           rm -rf public/build
           rsync -av resources/app/build public
